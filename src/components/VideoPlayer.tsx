@@ -90,7 +90,7 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
         })
         return () => hls.destroy()
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = src
+        video.src = playableSrc
         video.addEventListener("loadedmetadata", () => setLoading(false))
         return () => { video.src = "" }
       } else {
