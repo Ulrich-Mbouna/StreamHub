@@ -225,7 +225,7 @@ export default function IPTVCatalog() {
           </div>
           <div>
             <h2 className={`text-2xl font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-              IPTV Catalog
+              IPTV Channels
             </h2>
             <p className={`text-sm ${isDark ? "text-dark-100" : "text-slate-500"}`}>
               Browse channels from iptv-org & Free-TV
