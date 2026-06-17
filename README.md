@@ -12,16 +12,16 @@ A free, open-source IPTV dashboard for streaming live TV channels, browsing comm
 ## Features
 
 - **IPTV Player** — Stream curated free IPTV channels with a built-in HLS player. Quality badges, category filters, and real-time connection status.
-- **IPTV Catalog** — Browse thousands of community-maintained channels from [iptv-org/iptv](https://github.com/iptv-org/iptv). Search by name, filter by category, and preview instantly.
+- **IPTV Catalog** — Browse 4,000+ community-maintained channels from [iptv-org/iptv](https://github.com/iptv-org/iptv) and [Free-TV/IPTV](https://github.com/Free-TV/IPTV) with automatic deduplication. Search by name, filter by category or country, and preview instantly.
 - **Live Sports** — Watch live sports streams across football, basketball, NFL, hockey, cricket, and more via the free [SportSRC API](https://sportsrc.org) with embedded players.
+- **Live → Streams Integration** — Latest football match from Live Sports automatically appears in the Streams section as a one-click live card.
 - **Dark / Light Mode** — Full theme support with smooth transitions.
 - **Responsive Design** — Works on desktop, tablet, and mobile.
 
 ---
 
 ## Screenshots
-
-> <img width="1402" height="765" alt="image" src="https://github.com/user-attachments/assets/58f28123-6b33-4fa6-a90e-616109f29385" />
+<img width="1435" height="754" alt="image" src="https://github.com/user-attachments/assets/4dc1f5d2-c602-4e53-bc78-1596cf5217bb" />
 
 
 ---
@@ -41,10 +41,13 @@ A free, open-source IPTV dashboard for streaming live TV channels, browsing comm
 
 ## Data Sources
 
-| Source | Description | License |
-|--------|-------------|---------|
-| [iptv-org/iptv](https://github.com/iptv-org/iptv) | 2,500+ community-curated free IPTV channels | MIT |
-| [SportSRC API](https://sportsrc.org) | Free sports streaming API (match schedules + embedded streams) | Free API |
+| Source | Description | Channels | License |
+|--------|-------------|----------|---------|
+| [iptv-org/iptv](https://github.com/iptv-org/iptv) | Community-curated IPTV channels (category-grouped) | 2,500+ | MIT |
+| [Free-TV/IPTV](https://github.com/Free-TV/IPTV) | Country-organized IPTV channels (80+ countries) | 1,800+ | MIT |
+| [SportSRC API](https://sportsrc.org) | Free sports streaming API (match schedules + embedded streams) | — | Free API |
+
+> **Deduplication:** Both M3U sources are merged at runtime. Duplicate streams (same URL) are automatically removed, resulting in ~4,000+ unique channels.
 
 ---
 
@@ -92,18 +95,20 @@ npm run preview
 ```
 src/
 ├── components/
-│   ├── HomePage.tsx        # Landing page with features & credits
-│   ├── IPTVPlayer.tsx      # Curated IPTV channel player
-│   ├── IPTVCatalog.tsx     # Full channel catalog from iptv-org
-│   ├── LiveSports.tsx      # Live sports streams
-│   ├── Sidebar.tsx         # Navigation sidebar
-│   └── VideoPlayer.tsx     # HLS video player component
+│   ├── HomePage.tsx          # Landing page with features & data sources
+│   ├── IPTVPlayer.tsx        # Curated IPTV channel player + live match embed
+│   ├── IPTVCatalog.tsx       # Multi-source channel catalog with filters
+│   ├── LiveSports.tsx        # Live sports streams & match schedules
+│   ├── LegalDisclaimer.tsx   # Legal & terms page
+│   ├── Sidebar.tsx           # Navigation sidebar
+│   └── VideoPlayer.tsx       # HLS video player component
 ├── context/
-│   └── ThemeContext.tsx     # Dark/Light theme provider
-├── types.ts                # TypeScript interfaces
-├── App.tsx                 # Root component with routing
-├── main.tsx                # Entry point
-└── index.css               # Global styles & Tailwind config
+│   ├── ThemeContext.tsx       # Dark/Light theme provider
+│   └── LiveStreamContext.tsx  # Live match state shared between Sports & Streams
+├── types.ts                  # TypeScript interfaces
+├── App.tsx                   # Root component with hash-based routing
+├── main.tsx                  # Entry point
+└── index.css                 # Global styles & Tailwind config
 ```
 
 ---
@@ -122,13 +127,16 @@ src/
 ## How It Works
 
 ### IPTV Player
-Loads curated free IPTV channels (beIN Sports, Fox Sports, etc.) and streams them via HLS.js through a local proxy to handle CORS.
+Loads curated free IPTV channels (beIN Sports, Fox Sports, etc.) and streams them via HLS.js through a local proxy to handle CORS. When a live football match is available from the Sports section, a prominent red "Live Match" card appears at the top of the channel list — click to watch the embedded stream.
 
 ### IPTV Catalog
-Fetches the M3U playlist from `iptv-org/iptv` (~2.5MB), parses `#EXTINF` tags, and organizes channels by category. Supports search and country filtering.
+Fetches M3U playlists from **two sources** in parallel (iptv-org + Free-TV), deduplicates by stream URL, and merges into a single unified catalogue. Supports search, category filtering, and country filtering with a compact accordion-style filter panel.
 
 ### Live Sports
-Connects to the SportSRC API to display upcoming match schedules. Selecting a match loads embedded stream players directly from `embed.st` (bypassing ad wrappers).
+Connects to the SportSRC API to display upcoming match schedules across 9 sport categories. Selecting a match loads embedded stream players directly from `embed.st`. The latest football match is automatically pushed to the Streams section via a shared context.
+
+### URL Hash Routing
+Active tab state is stored in the URL hash (`#home`, `#iptv`, `# catalogue`, `#sports`). Refreshing the page restores the last-viewed section. Browser back/forward navigation also works correctly.
 
 ---
 
@@ -153,6 +161,7 @@ This project is open source and available under the [MIT License](LICENSE).
 ## Acknowledgments
 
 - [iptv-org/iptv](https://github.com/iptv-org/iptv) — Community-curated IPTV channel lists
+- [Free-TV/IPTV](https://github.com/Free-TV/IPTV) — Country-organized IPTV channels
 - [SportSRC](https://sportsrc.org) — Free sports streaming API
 - [HLS.js](https://github.com/video-dev/hls.js) — HTTP Live Streaming client
 - [Lucide](https://lucide.dev) — Beautiful open-source icons
