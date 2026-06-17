@@ -1,5 +1,5 @@
 import type React from "react"
-import { Tv, Monitor, Trophy, Sun, Moon, Home, TvMinimalPlay,  X,  Scale } from "lucide-react"
+import { Tv, Monitor, Trophy, Sun, Moon, Home, TvMinimalPlay,  X } from "lucide-react"
 import { useTheme } from "../context/ThemeContext"
 
 type Tab = "home" | "iptv" | "catalog" | "sports" | "legal"
