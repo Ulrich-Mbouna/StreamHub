@@ -26,7 +26,7 @@ const CONTENT_VARIANTS = {
   exit: { opacity: 0, y: -8 },
 }
 
-const CONTENT_TRANSITION = { duration: 0.2, ease: "easeOut" }
+const CONTENT_TRANSITION = { duration: 0.2, ease: "easeOut" as const }
 
 function AppShell() {
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab)
