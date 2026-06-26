@@ -104,8 +104,8 @@ const cardVariants = {
 const panelVariants = {
   hidden: { opacity: 0, scale: 0.98 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.25, ease: "easeOut" } },
-  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.15 } },
 }
+const panelExit = { opacity: 0, scale: 0.98, transition: { duration: 0.15 } }
 
 function SkeletonCard({ isDark }: { isDark: boolean }) {
   return (
@@ -632,7 +632,7 @@ export default function LiveSports() {
                   variants={panelVariants}
                   initial="hidden"
                   animate="visible"
-                  exit="exit"
+                  exit={panelExit}
                   className="flex flex-col min-h-0 xl:flex-1"
                 >
                   <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black border border-white/[0.06] xl:aspect-auto xl:flex-1 xl:min-h-0">

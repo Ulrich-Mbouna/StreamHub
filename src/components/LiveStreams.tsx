@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Tv,
   Radio,
@@ -66,6 +67,46 @@ function getQualityColor(q: string, isDark: boolean) {
   }
 }
 
+const listVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04 },
+  },
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
+}
+
+const heroVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+  exit: { opacity: 0, y: -8, transition: { duration: 0.2 } },
+}
+
+function SkeletonChannel({ isDark }: { isDark: boolean }) {
+  return (
+    <div
+      className={`w-full p-3 sm:p-3.5 rounded-2xl border ${
+        isDark ? "border-white/5 bg-dark-300/30" : "border-slate-200 bg-white/80"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-11 h-11 rounded-xl shrink-0 ${isDark ? "bg-white/5" : "bg-slate-100"}`} />
+        <div className="flex-1 min-w-0">
+          <div className={`h-4 w-28 rounded ${isDark ? "bg-white/5" : "bg-slate-100"} mb-2`} />
+          <div className="flex items-center gap-2">
+            <div className={`h-3 w-14 rounded ${isDark ? "bg-white/5" : "bg-slate-100"}`} />
+            <div className={`h-3 w-8 rounded ${isDark ? "bg-white/5" : "bg-slate-100"}`} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function LiveStreams() {
   const { theme } = useTheme()
   const isDark = theme === "dark"
@@ -73,18 +114,33 @@ export default function LiveStreams() {
   const [activeChannel, setActiveChannel] = useState<Channel>(channels[0])
   const [filter, setFilter] = useState<string>("All")
   const [watchingLive, setWatchingLive] = useState(false)
+  const [, setTick] = useState(0)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const autoPlayRef = useRef(false)
 
-  // Auto-play when a live match is detected and user hasn't manually chosen something else
+  // Tick for Date.now() reactivity (every 60s)
   useEffect(() => {
-    if (liveMatch && !watchingLive) {
+    tickRef.current = setInterval(() => setTick((t) => t + 1), 60000)
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current)
+    }
+  }, [])
+
+  // Auto-play when a live match is detected — uses ref to avoid cascading setState
+  useEffect(() => {
+    if (liveMatch && !watchingLive && !autoPlayRef.current) {
+      autoPlayRef.current = true
       setWatchingLive(true)
     }
-  }, [liveMatch]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!liveMatch) {
+      autoPlayRef.current = false
+    }
+  }, [liveMatch, watchingLive])
 
-  // Compute whether the match has started (LIVE) or is approaching
+  const now = useMemo(() => Date.now(), []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const matchStatus = useMemo(() => {
     if (!liveMatch) return null
-    const now = Date.now()
     const diff = liveMatch.date - now
     if (diff <= 0) return { isLive: true, countdown: null }
     const hours = Math.floor(diff / 3600000)
@@ -93,7 +149,7 @@ export default function LiveStreams() {
       isLive: false,
       countdown: hours > 0 ? `${hours}h ${mins}m` : `${mins}m`,
     }
-  }, [liveMatch])
+  }, [liveMatch, now])
 
   const filtered = useMemo(
     () => (filter === "All" ? channels : channels.filter((c) => c.category === filter)),
@@ -124,79 +180,93 @@ export default function LiveStreams() {
               Select a channel to start streaming
             </p>
           </div>
-          <span className="sm:ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-sport-green/20 text-sport-green rounded-full border border-sport-green/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse" />
-            LIVE
-          </span>
+          {liveMatch && matchStatus?.isLive && (
+            <motion.span
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="sm:ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-sport-green/20 text-sport-green rounded-full border border-sport-green/30"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse" />
+              LIVE
+            </motion.span>
+          )}
         </div>
       </div>
 
       {/* Auto-detected Live Match Hero */}
-      {liveMatch && matchStatus && (
-        <div
-          className={`mb-5 sm:mb-6 p-4 sm:p-5 rounded-2xl border transition-all duration-300 ${
-            watchingLive
-              ? isDark
-                ? "border-sport-red/40 bg-sport-red/[0.06] shadow-lg shadow-sport-red/5"
-                : "border-sport-red/30 bg-sport-red/5 shadow-md shadow-sport-red/5"
-              : isDark
-                ? "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.12]"
-                : "border-slate-200 bg-white hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${matchStatus.isLive ? "bg-sport-red/20" : "bg-sport-yellow/20"}`}>
-                <CircleDot className={`w-4 h-4 ${matchStatus.isLive ? "text-sport-red" : "text-sport-yellow"}`} />
-              </div>
-              <span className={`text-xs font-semibold uppercase tracking-wider ${matchStatus.isLive ? "text-sport-red" : "text-sport-yellow"}`}>
-                {matchStatus.isLive ? "Live Football" : "Upcoming Football"}
-              </span>
-            </div>
-            {pollingStatus.isPolling && (
-              <span className={`text-[10px] ${isDark ? "text-dark-100" : "text-slate-400"}`}>
-                Checking streams...
-              </span>
-            )}
-            {!matchStatus.isLive && matchStatus.countdown && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold bg-sport-yellow/15 text-sport-yellow rounded-lg">
-                <Clock className="w-3 h-3" />
-                Starting in {matchStatus.countdown}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`text-base sm:text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-                  {liveMatch.teams.home.name} vs {liveMatch.teams.away.name}
+      <AnimatePresence mode="wait">
+        {liveMatch && matchStatus && (
+          <motion.div
+            key={liveMatch.id}
+            variants={heroVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className={`mb-5 sm:mb-6 p-4 sm:p-5 rounded-2xl border transition-all duration-300 ${
+              watchingLive
+                ? isDark
+                  ? "border-sport-red/40 bg-sport-red/[0.06] shadow-lg shadow-sport-red/5"
+                  : "border-sport-red/30 bg-sport-red/5 shadow-md shadow-sport-red/5"
+                : isDark
+                  ? "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.12]"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${matchStatus.isLive ? "bg-sport-red/20" : "bg-sport-yellow/20"}`}>
+                  <CircleDot className={`w-4 h-4 ${matchStatus.isLive ? "text-sport-red" : "text-sport-yellow"}`} />
+                </div>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${matchStatus.isLive ? "text-sport-red" : "text-sport-yellow"}`}>
+                  {matchStatus.isLive ? "Live Football" : "Upcoming Football"}
                 </span>
-                {matchStatus.isLive && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-sport-red/15 text-sport-red rounded shrink-0">
-                    <span className="w-1 h-1 rounded-full bg-sport-red animate-pulse" />
-                    LIVE
-                  </span>
-                )}
               </div>
-              <p className={`text-xs ${isDark ? "text-dark-100" : "text-slate-500"}`}>
-                {liveMatch.title}
-              </p>
+              {pollingStatus.isPolling && (
+                <span className={`text-[10px] ${isDark ? "text-dark-100" : "text-slate-400"}`}>
+                  Checking streams...
+                </span>
+              )}
+              {!matchStatus.isLive && matchStatus.countdown && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold bg-sport-yellow/15 text-sport-yellow rounded-lg">
+                  <Clock className="w-3 h-3" />
+                  Starting in {matchStatus.countdown}
+                </span>
+              )}
             </div>
-            <button
-              onClick={() => setWatchingLive(true)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors duration-200 cursor-pointer shrink-0 ${
-                matchStatus.isLive
-                  ? "bg-sport-red hover:bg-sport-red/90"
-                  : "bg-sport-yellow hover:bg-sport-yellow/90"
-              }`}
-            >
-              <Play className="w-4 h-4" />
-              {watchingLive ? "Watching" : matchStatus.isLive ? "Watch Now" : "Set Reminder"}
-            </button>
-          </div>
-        </div>
-      )}
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-base sm:text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {liveMatch.teams.home.name} vs {liveMatch.teams.away.name}
+                  </span>
+                  {matchStatus.isLive && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-sport-red/15 text-sport-red rounded shrink-0">
+                      <span className="w-1 h-1 rounded-full bg-sport-red animate-pulse" />
+                      LIVE
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs ${isDark ? "text-dark-100" : "text-slate-500"}`}>
+                  {liveMatch.title}
+                </p>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setWatchingLive(true)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors duration-200 cursor-pointer shrink-0 ${
+                  matchStatus.isLive
+                    ? "bg-sport-red hover:bg-sport-red/90"
+                    : "bg-sport-yellow hover:bg-sport-yellow/90"
+                }`}
+              >
+                <Play className="w-4 h-4" />
+                {watchingLive ? "Watching" : matchStatus.isLive ? "Watch Now" : "Set Reminder"}
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 xl:flex-1 xl:min-h-0">
         {/* Player Section */}
@@ -220,53 +290,62 @@ export default function LiveStreams() {
           </div>
 
           {/* Now Playing Bar */}
-          <div className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-2xl border backdrop-blur-sm transition-colors ${isDark ? "bg-dark-300/30 border-white/5" : "bg-white/80 border-slate-200"}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${watchingLive ? "bg-sport-red/20" : isDark ? "bg-accent/20" : "bg-accent/10"}`}>
-                  {watchingLive ? (
-                    <CircleDot className="w-4 h-4 sm:w-5 sm:h-5 text-sport-red" />
-                  ) : (
-                    <Radio className="w-4 h-4 sm:w-5 sm:h-5 text-accent-light" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
-                    {watchingLive && liveMatch ? liveMatch.title : activeChannel.name}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`text-xs hidden sm:inline ${isDark ? "text-dark-100" : "text-slate-500"}`}>
-                      {watchingLive && liveMatch ? liveMatch.teams.home.name + " vs " + liveMatch.teams.away.name : activeChannel.category}
-                    </span>
-                    {watchingLive && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-sport-red/15 text-sport-red rounded">
-                        <span className="w-1 h-1 rounded-full bg-sport-red animate-pulse" />
-                        LIVE
-                      </span>
-                    )}
-                    {!watchingLive && (
-                      <>
-                        <span className={`w-1 h-1 rounded-full hidden sm:block ${isDark ? "bg-dark-100" : "bg-slate-400"}`} />
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getQualityColor(activeChannel.quality, isDark)}`}>
-                          {activeChannel.quality}
-                        </span>
-                      </>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={watchingLive ? `live-${liveMatch?.id}` : `channel-${activeChannel.id}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+              className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-2xl border backdrop-blur-sm transition-colors ${isDark ? "bg-dark-300/30 border-white/5" : "bg-white/80 border-slate-200"}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${watchingLive ? "bg-sport-red/20" : isDark ? "bg-accent/20" : "bg-accent/10"}`}>
+                    {watchingLive ? (
+                      <CircleDot className="w-4 h-4 sm:w-5 sm:h-5 text-sport-red" />
+                    ) : (
+                      <Radio className="w-4 h-4 sm:w-5 sm:h-5 text-accent-light" />
                     )}
                   </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                      {watchingLive && liveMatch ? liveMatch.title : activeChannel.name}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-xs hidden sm:inline ${isDark ? "text-dark-100" : "text-slate-500"}`}>
+                        {watchingLive && liveMatch ? liveMatch.teams.home.name + " vs " + liveMatch.teams.away.name : activeChannel.category}
+                      </span>
+                      {watchingLive && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-sport-red/15 text-sport-red rounded">
+                          <span className="w-1 h-1 rounded-full bg-sport-red animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                      {!watchingLive && (
+                        <>
+                          <span className={`w-1 h-1 rounded-full hidden sm:block ${isDark ? "bg-dark-100" : "bg-slate-400"}`} />
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getQualityColor(activeChannel.quality, isDark)}`}>
+                            {activeChannel.quality}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs shrink-0">
+                  <Signal className="w-3.5 h-3.5 text-sport-green" />
+                  <span className="text-sport-green font-medium hidden sm:inline">Connected</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs shrink-0">
-                <Signal className="w-3.5 h-3.5 text-sport-green" />
-                <span className="text-sport-green font-medium hidden sm:inline">Connected</span>
-              </div>
-            </div>
-          </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Sidebar */}
         <div className="flex flex-col min-h-0">
           {/* Category Filters */}
-          <div className="mb-4">
+          <div className="relative mb-4">
             <div className="flex items-center gap-2 mb-3">
               <Zap className={`w-4 h-4 ${isDark ? "text-dark-100" : "text-slate-400"}`} />
               <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
@@ -276,35 +355,44 @@ export default function LiveStreams() {
                 ({channels.length})
               </span>
             </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 sm:max-h-none">
-              <button
-                onClick={() => setFilter("All")}
-                className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-xl whitespace-nowrap transition-all ${
-                  filter === "All"
-                    ? "bg-accent text-white shadow-lg shadow-accent/25"
-                    : isDark
-                      ? "bg-white/5 text-dark-100 hover:text-white hover:bg-white/10"
-                      : "bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
-                }`}
-              >
-                All
-              </button>
-              {Array.from(categoryCounts.entries()).map(([cat, count]) => (
-                <button
-                  key={cat}
-                  onClick={() => setFilter(cat)}
+            <div className="relative">
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide pr-6">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setFilter("All")}
                   className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-xl whitespace-nowrap transition-all ${
-                    filter === cat
+                    filter === "All"
                       ? "bg-accent text-white shadow-lg shadow-accent/25"
                       : isDark
                         ? "bg-white/5 text-dark-100 hover:text-white hover:bg-white/10"
                         : "bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
                   }`}
                 >
-                  {cat}
-                  <span className="ml-1 opacity-50">{count}</span>
-                </button>
-              ))}
+                  All
+                </motion.button>
+                {Array.from(categoryCounts.entries()).map(([cat, count]) => (
+                  <motion.button
+                    key={cat}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setFilter(cat)}
+                    className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-xl whitespace-nowrap transition-all ${
+                      filter === cat
+                        ? "bg-accent text-white shadow-lg shadow-accent/25"
+                        : isDark
+                          ? "bg-white/5 text-dark-100 hover:text-white hover:bg-white/10"
+                          : "bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
+                    }`}
+                  >
+                    {cat}
+                    <span className="ml-1 opacity-50">{count}</span>
+                  </motion.button>
+                ))}
+              </div>
+              <div
+                className={`pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l to-transparent ${
+                  isDark ? "from-dark-500" : "from-[var(--surface-500,#f8fafc)]"
+                }`}
+              />
             </div>
           </div>
 
@@ -347,7 +435,8 @@ export default function LiveStreams() {
 
             {/* Live Match Card */}
             {liveMatch && matchStatus && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setWatchingLive(true)}
                 className={`w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 ${
                   watchingLive
@@ -398,61 +487,71 @@ export default function LiveStreams() {
                     </div>
                   )}
                 </div>
-              </button>
+              </motion.button>
             )}
 
-            {/* Regular Channels */}
-            {filtered.map((channel) => {
-              const isActive = !watchingLive && activeChannel.id === channel.id
-              return (
-                <button
-                  key={channel.id}
-                  onClick={() => { setActiveChannel(channel); setWatchingLive(false) }}
-                  className={`w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 ${
-                    isActive
-                      ? isDark
-                        ? "border-accent/50 bg-accent/10 shadow-lg shadow-accent/10"
-                        : "border-accent/30 bg-accent/5 shadow-md shadow-accent/10"
-                      : isDark
-                        ? "border-white/5 bg-dark-300/30 hover:border-white/10 hover:bg-white/5"
-                        : "border-slate-200 bg-white/80 hover:border-slate-300 hover:bg-white"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all ${
-                        isActive
-                          ? "bg-accent/20 text-accent-light"
-                          : isDark
-                            ? "bg-white/5 text-dark-100"
-                            : "bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      <Tv className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${isActive ? "text-accent-light" : isDark ? "text-white" : "text-slate-900"}`}>
-                        {channel.name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-xs ${isDark ? "text-dark-100" : "text-slate-500"}`}>
-                          {channel.category}
-                        </span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getQualityColor(channel.quality, isDark)}`}>
-                          {channel.quality}
-                        </span>
+            {/* Regular Channels — Staggered */}
+            <motion.div
+              key={filter}
+              variants={listVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-1.5"
+            >
+              {filtered.map((channel) => {
+                const isActive = !watchingLive && activeChannel.id === channel.id
+                return (
+                  <motion.button
+                    key={channel.id}
+                    variants={cardVariants}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => { setActiveChannel(channel); setWatchingLive(false) }}
+                    className={`w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 ${
+                      isActive
+                        ? isDark
+                          ? "border-accent/50 bg-accent/10 shadow-lg shadow-accent/10"
+                          : "border-accent/30 bg-accent/5 shadow-md shadow-accent/10"
+                        : isDark
+                          ? "border-white/5 bg-dark-300/30 hover:border-white/10 hover:bg-white/5"
+                          : "border-slate-200 bg-white/80 hover:border-slate-300 hover:bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                          isActive
+                            ? "bg-accent/20 text-accent-light"
+                            : isDark
+                              ? "bg-white/5 text-dark-100"
+                              : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        <Tv className="w-5 h-5" />
                       </div>
-                    </div>
-                    {isActive && (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Play className="w-4 h-4 text-accent-light" />
-                        <div className="w-2 h-2 rounded-full bg-sport-green animate-pulse" />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${isActive ? "text-accent-light" : isDark ? "text-white" : "text-slate-900"}`}>
+                          {channel.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs ${isDark ? "text-dark-100" : "text-slate-500"}`}>
+                            {channel.category}
+                          </span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getQualityColor(channel.quality, isDark)}`}>
+                            {channel.quality}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
+                      {isActive && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Play className="w-4 h-4 text-accent-light" />
+                          <div className="w-2 h-2 rounded-full bg-sport-green animate-pulse" />
+                        </div>
+                      )}
+                    </div>
+                  </motion.button>
+                )
+              })}
+            </motion.div>
           </div>
         </div>
       </div>
