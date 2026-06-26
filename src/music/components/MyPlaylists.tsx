@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useTheme } from "../../context/ThemeContext"
 import { useMusic } from "../hooks/useMusic"
-import { Plus, ListMusic, Trash2, PlayCircle, Music, X, Edit3, Check } from "lucide-react"
+import { Plus, ListMusic, Trash2, PlayCircle, Music, X, Edit3, Check, Heart } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import TrackCard from "./TrackCard"
 
@@ -18,6 +18,10 @@ export default function MyPlaylists() {
   const mutedText = isDark ? "text-dark-100" : "text-slate-500"
   const strongText = isDark ? "text-white" : "text-slate-900"
   const panelClass = isDark ? "bg-dark-300/30 border-white/[0.06]" : "bg-white border-slate-200"
+
+  const favoriteTracks = state.recentlyPlayed.filter((t) => state.favorites.includes(t.id))
+  const queueFavorites = state.queue.filter((t) => state.favorites.includes(t.id) && !favoriteTracks.find((f) => f.id === t.id))
+  const allFavoriteTracks = [...favoriteTracks, ...queueFavorites]
 
   const handleCreate = () => {
     if (!newName.trim()) return
@@ -213,11 +217,20 @@ export default function MyPlaylists() {
       {!activePl && state.favorites.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
+            <Heart className="w-3.5 h-3.5 text-sport-red fill-current" />
             <span className={`text-xs font-semibold uppercase tracking-wider ${mutedText}`}>Favorites ({state.favorites.length})</span>
           </div>
-          <p className={`text-xs ${mutedText}`}>
-            Favorited tracks are saved across sessions. Click the heart icon on any track to add it here.
-          </p>
+          {allFavoriteTracks.length > 0 ? (
+            <div className="space-y-2">
+              {allFavoriteTracks.slice(0, 10).map((track, i) => (
+                <TrackCard key={`fav-${track.id}-${i}`} track={track} index={i} queue={allFavoriteTracks} />
+              ))}
+            </div>
+          ) : (
+            <p className={`text-xs ${mutedText}`}>
+              Favorited tracks are saved across sessions. Click the heart icon on any track to add it here.
+            </p>
+          )}
         </div>
       )}
 

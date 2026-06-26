@@ -8,6 +8,88 @@ interface UseYouTubeSearchReturn {
   search: (query: string) => Promise<void>
 }
 
+const HEALTH_KEY = "streamhub-invidious-health"
+const CACHE_KEY = "streamhub-youtube-search-cache"
+const CACHE_TTL = 24 * 60 * 60 * 1000
+
+type HealthScores = Record<string, number>
+
+function getHealthScores(): HealthScores {
+  try {
+    return JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}")
+  } catch {
+    return {}
+  }
+}
+
+function recordSuccess(instance: string) {
+  const scores = getHealthScores()
+  scores[instance] = (scores[instance] || 0) + 1
+  try {
+    localStorage.setItem(HEALTH_KEY, JSON.stringify(scores))
+  } catch { /* ignore */ }
+}
+
+function recordFailure(instance: string) {
+  const scores = getHealthScores()
+  scores[instance] = Math.max((scores[instance] || 0) - 1, -5)
+  try {
+    localStorage.setItem(HEALTH_KEY, JSON.stringify(scores))
+  } catch { /* ignore */ }
+}
+
+function sortByHealth(instances: string[]): string[] {
+  const scores = getHealthScores()
+  return [...instances].sort((a, b) => (scores[b] || 0) - (scores[a] || 0))
+}
+
+interface CachedResult {
+  data: Track[]
+  timestamp: number
+}
+
+function getCachedResults(query: string): Track[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const cache: Record<string, CachedResult> = JSON.parse(raw)
+    const entry = cache[query.toLowerCase().trim()]
+    if (!entry) return null
+    if (Date.now() - entry.timestamp > CACHE_TTL) {
+      delete cache[query.toLowerCase().trim()]
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+      return null
+    }
+    return entry.data
+  } catch {
+    return null
+  }
+}
+
+function setCachedResults(query: string, data: Track[]) {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    const cache: Record<string, CachedResult> = raw ? JSON.parse(raw) : {}
+    cache[query.toLowerCase().trim()] = { data, timestamp: Date.now() }
+    const keys = Object.keys(cache)
+    if (keys.length > 50) {
+      const oldest = keys.sort((a, b) => cache[a].timestamp - cache[b].timestamp)
+      for (let i = 0; i < keys.length - 50; i++) {
+        delete cache[oldest[i]]
+      }
+    }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+  } catch { /* ignore */ }
+}
+
+const INVIDIOUS_INSTANCES = [
+  "https://inv.thepixora.com",
+  "https://invidious.nerdvpn.de",
+  "https://inv.nadeko.net",
+  "https://invidious.f5.si",
+  "https://yt.chocolatemoo53.com",
+]
+
 export function useYouTubeSearch(): UseYouTubeSearchReturn {
   const [results, setResults] = useState<Track[]>([])
   const [loading, setLoading] = useState(false)
@@ -15,26 +97,34 @@ export function useYouTubeSearch(): UseYouTubeSearchReturn {
 
   const search = useCallback(async (query: string) => {
     if (!query.trim()) return
+
+    const cached = getCachedResults(query)
+    if (cached) {
+      setResults(cached)
+      setError(null)
+      return
+    }
+
     setLoading(true)
     setError(null)
 
-    const invidiousInstances = [
-      "https://inv.thepixora.com",
-      "https://invidious.nerdvpn.de",
-      "https://inv.nadeko.net",
-      "https://invidious.f5.si",
-      "https://yt.chocolatemoo53.com",
-    ]
+    const sorted = sortByHealth(INVIDIOUS_INSTANCES)
 
-    for (const instance of invidiousInstances) {
+    for (const instance of sorted) {
       try {
         const res = await fetch(
           `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance`
         )
-        if (!res.ok) continue
+        if (!res.ok) {
+          recordFailure(instance)
+          continue
+        }
         const invidiousData = await res.json()
 
-        if (!Array.isArray(invidiousData) || invidiousData.length === 0) continue
+        if (!Array.isArray(invidiousData) || invidiousData.length === 0) {
+          recordFailure(instance)
+          continue
+        }
 
         const tracks: Track[] = invidiousData
           .filter((item: { type: string }) => item.type === "video")
@@ -50,11 +140,14 @@ export function useYouTubeSearch(): UseYouTubeSearchReturn {
           }))
 
         if (tracks.length > 0) {
+          recordSuccess(instance)
+          setCachedResults(query, tracks)
           setResults(tracks)
           setLoading(false)
           return
         }
       } catch {
+        recordFailure(instance)
         continue
       }
     }

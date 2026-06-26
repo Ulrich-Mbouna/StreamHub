@@ -21,18 +21,22 @@ function loadPersistedState(): Partial<MusicPlayerState> {
   }
 }
 
-function persistState(state: MusicPlayerState) {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        volume: state.volume,
-        favorites: state.favorites,
-        recentlyPlayed: state.recentlyPlayed,
-        playlists: state.playlists,
-      })
-    )
-  } catch { /* ignore */ }
+let persistTimeout: ReturnType<typeof setTimeout> | null = null
+function debouncedPersistState(state: MusicPlayerState) {
+  if (persistTimeout) clearTimeout(persistTimeout)
+  persistTimeout = setTimeout(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          volume: state.volume,
+          favorites: state.favorites,
+          recentlyPlayed: state.recentlyPlayed,
+          playlists: state.playlists,
+        })
+      )
+    } catch { /* ignore */ }
+  }, 300)
 }
 
 const persisted = loadPersistedState()
@@ -255,9 +259,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     youTubeControlsRef.current = null
   }, [])
 
-  // Persist to localStorage on state changes
+  // Persist to localStorage on state changes (debounced)
   useEffect(() => {
-    persistState(state)
+    debouncedPersistState(state)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.volume, state.favorites, state.recentlyPlayed, state.playlists])
 
@@ -274,6 +278,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     onTrackEnd: handleTrackEnd,
     onTimeUpdate: (time) => dispatch({ type: "SET_PROGRESS", progress: time }),
     onDurationChange: (dur) => dispatch({ type: "SET_DURATION", duration: dur }),
+    onError: () => { dispatch({ type: "PAUSE" }) },
   })
 
   // Keep handleTrackEnd ref current for YouTube state change handler
@@ -451,6 +456,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             youTubeControlsRef.current.setVolume(newVol)
           }
           audioSetVolume(newVol)
+          dispatch({ type: "SET_VOLUME", volume: newVol })
           break
         }
         case "ArrowDown": {
@@ -460,6 +466,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             youTubeControlsRef.current.setVolume(newVol)
           }
           audioSetVolume(newVol)
+          dispatch({ type: "SET_VOLUME", volume: newVol })
           break
         }
         case "KeyM":

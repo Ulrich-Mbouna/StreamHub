@@ -23,7 +23,7 @@ export default function YouTubeSearch() {
   const panelClass = isDark ? "bg-dark-300/30 border-white/[0.06]" : "bg-white border-slate-200"
 
   const quickSearches = [
-    "Trending Music 2026",
+    "Trending Music",
     "Lo-fi Beats",
     "Jazz Classics",
     "EDM Mix",

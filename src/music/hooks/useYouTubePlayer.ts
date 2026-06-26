@@ -56,13 +56,14 @@ interface UseYouTubePlayerOptions {
   videoId: string
   onStateChange?: (state: number) => void
   onReady?: () => void
+  onError?: (error: Error) => void
 }
 
 let apiLoading = false
 let apiLoaded = false
 
 function loadYTApi(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (apiLoaded && window.YT && window.YT.Player) {
       resolve()
       return
@@ -78,6 +79,9 @@ function loadYTApi(): Promise<void> {
       const script = document.createElement("script")
       script.src = "https://www.youtube.com/iframe_api"
       script.async = true
+      script.onerror = () => {
+        reject(new Error("Failed to load YouTube IFrame API script"))
+      }
       document.head.appendChild(script)
     }
 
@@ -87,25 +91,41 @@ function loadYTApi(): Promise<void> {
         resolve()
       }
     }, 50)
+
+    setTimeout(() => {
+      clearInterval(check)
+      if (!apiLoaded) {
+        reject(new Error("YouTube IFrame API load timeout"))
+      }
+    }, 15000)
   })
 }
 
-export function useYouTubePlayer({ videoId, onStateChange, onReady }: UseYouTubePlayerOptions) {
+export function useYouTubePlayer({ videoId, onStateChange, onReady, onError }: UseYouTubePlayerOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayerInstance | null>(null)
   const [isReady, setIsReady] = useState(false)
   const currentVideoIdRef = useRef(videoId)
-  const callbacksRef = useRef({ onStateChange, onReady })
+  const callbacksRef = useRef({ onStateChange, onReady, onError })
 
   useEffect(() => {
-    callbacksRef.current = { onStateChange, onReady }
+    callbacksRef.current = { onStateChange, onReady, onError }
   })
 
   useEffect(() => {
     let cancelled = false
 
     const init = async () => {
-      await loadYTApi()
+      try {
+        await loadYTApi()
+      } catch (err) {
+        if (!cancelled) {
+          callbacksRef.current.onError?.(
+            err instanceof Error ? err : new Error("YouTube API failed to load")
+          )
+        }
+        return
+      }
       if (cancelled || !containerRef.current || !window.YT) return
 
       if (playerRef.current) {
@@ -139,10 +159,21 @@ export function useYouTubePlayer({ videoId, onStateChange, onReady }: UseYouTube
                 callbacksRef.current.onStateChange?.(event.data)
               }
             },
+            onError: (event) => {
+              if (!cancelled) {
+                callbacksRef.current.onError?.(
+                  new Error(`YouTube player error (code ${event.data})`)
+                )
+              }
+            },
           },
         })
-      } catch {
-        // Player creation failed
+      } catch (err) {
+        if (!cancelled) {
+          callbacksRef.current.onError?.(
+            err instanceof Error ? err : new Error("Failed to create YouTube player")
+          )
+        }
       }
     }
 

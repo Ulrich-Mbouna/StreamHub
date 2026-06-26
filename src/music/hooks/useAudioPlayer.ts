@@ -4,15 +4,21 @@ interface AudioPlayerOptions {
   onTrackEnd?: () => void
   onTimeUpdate?: (time: number) => void
   onDurationChange?: (duration: number) => void
+  onError?: (error: string) => void
 }
 
 export function useAudioPlayer(options?: AudioPlayerOptions) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const optionsRef = useRef(options)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolumeState] = useState(0.8)
   const [isMuted, setIsMuted] = useState(false)
+
+  useEffect(() => {
+    optionsRef.current = options
+  })
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -25,27 +31,51 @@ export function useAudioPlayer(options?: AudioPlayerOptions) {
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime)
-      options?.onTimeUpdate?.(audio.currentTime)
+      optionsRef.current?.onTimeUpdate?.(audio.currentTime)
     }
 
     const handleDurationChange = () => {
       setDuration(audio.duration || 0)
-      options?.onDurationChange?.(audio.duration || 0)
+      optionsRef.current?.onDurationChange?.(audio.duration || 0)
     }
 
     const handleEnded = () => {
       setIsPlaying(false)
-      options?.onTrackEnd?.()
+      optionsRef.current?.onTrackEnd?.()
     }
 
     const handlePlay = () => setIsPlaying(true)
     const handlePause = () => setIsPlaying(false)
+
+    const handleError = () => {
+      const err = audio.error
+      let msg = "Stream unavailable"
+      if (err) {
+        switch (err.code) {
+          case MediaError.MEDIA_ERR_ABORTED:
+            msg = "Playback aborted"
+            break
+          case MediaError.MEDIA_ERR_NETWORK:
+            msg = "Network error — stream may be offline"
+            break
+          case MediaError.MEDIA_ERR_DECODE:
+            msg = "Audio decode error"
+            break
+          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            msg = "Stream format not supported"
+            break
+        }
+      }
+      setIsPlaying(false)
+      optionsRef.current?.onError?.(msg)
+    }
 
     audio.addEventListener("timeupdate", handleTimeUpdate)
     audio.addEventListener("durationchange", handleDurationChange)
     audio.addEventListener("ended", handleEnded)
     audio.addEventListener("play", handlePlay)
     audio.addEventListener("pause", handlePause)
+    audio.addEventListener("error", handleError)
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate)
@@ -53,8 +83,9 @@ export function useAudioPlayer(options?: AudioPlayerOptions) {
       audio.removeEventListener("ended", handleEnded)
       audio.removeEventListener("play", handlePlay)
       audio.removeEventListener("pause", handlePause)
+      audio.removeEventListener("error", handleError)
     }
-  }, [options])
+  }, [])
 
   const loadAndPlay = useCallback(async (url: string) => {
     const audio = audioRef.current
