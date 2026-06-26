@@ -39,7 +39,7 @@ const destinations = [
     title: "IPTV Catalog",
     description: "Search & browse channels from iptv-org and Free-TV sources.",
     color: "text-sport-green",
-    metric: "4000+",
+    metric: "14000+",
     metricLabel: "channels",
   },
   {
@@ -63,7 +63,7 @@ const destinations = [
 ]
 
 const stats = [
-  { label: "IPTV channels", value: "4000+", icon: Radio, color: "text-accent-light" },
+  { label: "IPTV channels", value: "14000+", icon: Radio, color: "text-accent-light" },
   { label: "Radio stations", value: "45K+", icon: Headphones, color: "text-purple-400" },
   { label: "Sports categories", value: "9", icon: Trophy, color: "text-sport-yellow" },
   { label: "Open source", value: "100%", icon: Heart, color: "text-sport-red" },
