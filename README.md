@@ -17,15 +17,23 @@ A free, open-source dashboard for streaming live TV, browsing community playlist
 - **Live Sports** — Watch live sports streams across football, basketball, NFL, hockey, cricket, and more via the free [SportSRC API](https://sportsrc.org) with embedded players.
 - **Live → Streams Integration** — Latest football match from Live Sports automatically appears in the Streams section as a one-click live card.
 
-### Stream Music (New)
+### Stream Music
+
+#### Sources
 - **Internet Radio** — Browse 45,000+ radio stations from 200+ countries via the free [Radio Browser API](https://www.radio-browser.info). Search by name, filter by genre or country.
 - **YouTube Music** — Search and play YouTube music directly in the browser via the [Invidious API](https://invidious.io) (privacy-friendly, no API key needed).
-- **Persistent Player Bar** — Always-visible bottom player with play/pause, skip, seek, volume, shuffle, repeat, and queue management.
+
+#### Music Player
+- **Persistent Player Bar** — Always-visible full-width bottom player with play/pause, skip, seek, volume, shuffle, repeat, and queue management.
+- **YouTube IFrame API** — Full integration with YouTube's IFrame API for real-time progress sync, seeking, and playback control (not just a raw iframe).
+- **Background Playback** — Media Session API keeps audio playing when the browser is minimized or the screen is off. Shows lock screen and notification controls on Android.
+- **Interactive Progress Bar** — Touch-friendly seek bar on mobile with a draggable thumb. Desktop hover expand with precise seeking.
+- **Mobile Expanded Player** — Bottom sheet with large album art, full controls, volume slider, and queue view. Frosted glass backdrop blur.
+- **Queue System** — Add tracks to queue, play next, clear queue. Visual queue panel on desktop, full-screen queue in mobile bottom sheet.
 - **Playlists** — Create, rename, delete custom playlists. Add tracks from search results. All persisted to localStorage.
 - **Favorites** — Heart any track to save it to favorites. Persisted across sessions.
-- **Recently Played** — Auto-tracks your last 50 played tracks. Shown in the My Playlists tab.
-- **Queue System** — Add tracks to queue, play next, reorder, clear queue.
-- **YouTube Embed Player** — Floating YouTube iframe with minimize/maximize controls.
+- **Recently Played** — Auto-tracks your last 50 played tracks with individual remove buttons.
+- **Compact Filters** — Genre and country filters use progressive disclosure (show 6 by default, expand for more). Two-column layout on desktop.
 - **Audio Visualizer** — Animated bars on currently playing radio tracks.
 - **Keyboard Shortcuts** — Full keyboard control (see below).
 - **Volume Memory** — Volume setting persists across sessions.
@@ -33,7 +41,7 @@ A free, open-source dashboard for streaming live TV, browsing community playlist
 ### General
 - **URL-based Navigation** — Page state persists across refreshes via URL hash routing (`#home`, `#iptv`, `#catalog`, `#sports`, `#music`).
 - **Dark / Light Mode** — Full theme support with smooth transitions.
-- **Responsive Design** — Works on desktop, tablet, and mobile.
+- **Responsive Design** — Mobile-first design. Optimized for phones, tablets, and desktop.
 
 ---
 ## Screenshots
@@ -42,19 +50,30 @@ A free, open-source dashboard for streaming live TV, browsing community playlist
 <img width="1433" height="759" alt="image" src="https://github.com/user-attachments/assets/78c646b2-fdd1-4247-ba18-679ea277d3ed" />
 
 
-## Keyboard Shortcuts (Music Player)
+## Mobile & Responsive
 
-| Key | Action |
-|-----|--------|
-| `Space` | Play / Pause |
-| `←` | Seek -10s |
-| `→` | Seek +10s |
-| `Shift+←` | Previous track |
-| `Shift+→` | Next track |
-| `↑` / `↓` | Volume up/down |
-| `M` | Mute toggle |
-| `S` | Shuffle toggle |
-| `R` | Repeat cycle (none → all → one) |
+| Feature | Behavior |
+|---------|----------|
+| Player bar | Full-width bottom bar with thin progress indicator + touch seek |
+| Expanded player | 92dvh bottom sheet with backdrop blur, swipe handle, large artwork |
+| Genre/Country filters | Compact chips, 6 visible by default, "show more" toggle |
+| Track actions | Add to queue, favorite, and more menu always visible on mobile |
+| Queue panel | Full-width bottom sheet on mobile, floating panel on desktop |
+| Recently Played | Stacked list with inline delete button |
+| YouTube player | Responsive floating overlay, minimizable to bottom-right corner |
+
+---
+
+## Background Playback
+
+| Platform | Support |
+|----------|---------|
+| Chrome Android | Full — notification controls, lock screen, headphone buttons |
+| Chrome Desktop | Full — tab audio indicator |
+| iOS Safari | After user gesture — lock screen controls, headphone buttons |
+| Samsung Internet | Full — notification controls |
+
+Powered by the **Media Session API** — the same technology used by Spotify and YouTube Music.
 
 ---
 
@@ -68,6 +87,8 @@ A free, open-source dashboard for streaming live TV, browsing community playlist
 | Build Tool | Vite 8 |
 | Animation | Framer Motion |
 | Video Player | HLS.js |
+| YouTube | YouTube IFrame API |
+| Media Controls | Media Session API |
 | Icons | Lucide React |
 
 ---
@@ -92,6 +113,7 @@ A free, open-source dashboard for streaming live TV, browsing community playlist
 
 - [Node.js](https://nodejs.org/) 18+ (recommended 20+)
 - npm or yarn or pnpm
+
 
 ### Installation
 
@@ -132,16 +154,17 @@ src/
 ├── components/
 │   ├── HomePage.tsx              # Landing page with features & data sources
 │   ├── LiveStreams.tsx            # Curated IPTV channel player + live match embed
-│   ├── IPTVChannels.tsx          # Multi-source channel catalogue with filters
+│   ├── IPTVChannels.tsx          # Multi-source channel catalog with filters
 │   ├── LiveSports.tsx            # Live sports streams & match schedules
 │   ├── LegalDisclaimer.tsx       # Legal & terms page
 │   ├── Sidebar.tsx               # Navigation sidebar
 │   └── VideoPlayer.tsx           # HLS video player component
 ├── music/
 │   ├── types.ts                  # Music-specific TypeScript interfaces
-│   ├── MusicContext.tsx           # Global music state (queue, playlists, favourites)
+│   ├── MusicContext.tsx           # Global music state + Media Session API
 │   ├── hooks/
 │   │   ├── useAudioPlayer.ts     # HTML5 Audio controller
+│   │   ├── useYouTubePlayer.ts   # YouTube IFrame API controller
 │   │   ├── useRadioBrowser.ts    # Radio Browser API integration
 │   │   └── useYouTubeSearch.ts   # YouTube search via Invidious
 │   └── components/
@@ -149,9 +172,9 @@ src/
 │       ├── MusicPlayer.tsx       # Persistent bottom player bar
 │       ├── SourceTabs.tsx        # Radio / YouTube / Playlists switcher
 │       ├── TrackCard.tsx         # Reusable track row with actions
-│       ├── InternetRadio.tsx     # Radio station browser
+│       ├── InternetRadio.tsx     # Radio station browser with compact filters
 │       ├── YouTubeSearch.tsx     # YouTube music search
-│       ├── YouTubeEmbed.tsx      # Floating YouTube iframe player
+│       ├── YouTubeEmbed.tsx      # YouTube IFrame API player
 │       └── MyPlaylists.tsx       # Playlist management + favorites + history
 ├── context/
 │   ├── ThemeContext.tsx           # Dark/Light theme provider
@@ -181,20 +204,20 @@ src/
 Loads curated free IPTV channels (beIN Sports, Fox Sports, etc.) and streams them via HLS.js through a local proxy to handle CORS. When a live football match is available from the Sports section, a prominent red "Live Match" card appears at the top of the channel list.
 
 ### IPTV Catalog
-Fetches M3U playlists from **two sources** in parallel (iptv-org + Free-TV), deduplicates by stream URL, and merges into a single unified catalogue. Supports search, category filtering, and country filtering.
+Fetches M3U playlists from **two sources** in parallel (iptv-org + Free-TV), deduplicates by stream URL, and merges into a single unified catalog. Supports search, category filtering, and country filtering.
 
 ### Live Sports
 Connects to the SportSRC API to display upcoming match schedules across 9 sport categories. Selecting a match loads embedded stream players directly from `embed.st`.
 
 ### Stream Music
 The music portal connects to two free APIs:
-- **Radio Browser API** — No authentication required. Search 45K+ stations by name, genre, or country. Streams play directly via HTML5 Audio.
-- **Invidious API** — Privacy-friendly YouTube frontend. Searches YouTube for music videos and plays them via embedded YouTube iframes.
+- **Radio Browser API** — No authentication required. Search 45K+ stations by name, genre, or country. Streams play directly via HTML5 Audio with Media Session API integration.
+- **Invidious API** — Privacy-friendly YouTube frontend. Searches YouTube for music videos and plays them via the YouTube IFrame API for full playback control.
 
-All user data (volume, favourites, playlists, recently played) is persisted to `localStorage` under the `streamhub-music` key.
+All user data (volume, favorites, playlists, recently played) is persisted to `localStorage` under the `streamhub-music` key.
 
 ### URL Hash Routing
-Active tab state is stored in the URL hash (`#home`, `#iptv`, `# catalogue`, `#sports`, `#music`). Refreshing the page restores the last-viewed section. Browser back/forward navigation works correctly.
+Active tab state is stored in the URL hash (`#home`, `#iptv`, `#catalog`, `#sports`, `#music`). Refreshing the page restores the last-viewed section. Browser back/forward navigation works correctly.
 
 ---
 
@@ -223,7 +246,10 @@ This project is open source and available under the [MIT License](LICENSE).
 - [SportSRC](https://sportsrc.org) — Free sports streaming API
 - [Radio Browser](https://www.radio-browser.info) — Free internet radio station database
 - [Invidious](https://invidious.io) — Privacy-friendly YouTube frontend
+- [YouTube IFrame API](https://developers.google.com/youtube/iframe_api_reference) — YouTube player integration
+- [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) — Background playback & lock screen controls
 - [HLS.js](https://github.com/video-dev/hls.js) — HTTP Live Streaming client
 - [Lucide](https://lucide.dev) — Beautiful open-source icons
 - [Tailwind CSS](https://tailwindcss.com) — Utility-first CSS framework
 - [Framer Motion](https://www.framer.com/motion/) — Animation library for React
+
