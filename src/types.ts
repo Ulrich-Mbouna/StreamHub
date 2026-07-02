@@ -59,3 +59,35 @@ export interface MatchDetail {
   }[]
 }
 
+export interface EmbedSportexIframe {
+  server: string
+  url: string
+}
+
+export interface EmbedSportexMatch {
+  slug: string
+  tag: string
+  kickoff: string
+  endTime: string
+  poster: string | null
+  league: string
+  iframes: EmbedSportexIframe[]
+}
+
+export interface EmbedSportexResponse {
+  success: boolean
+  timestamp: number
+  football: EmbedSportexMatch[]
+  basketball: EmbedSportexMatch[]
+  amfootball: EmbedSportexMatch[]
+  baseball: EmbedSportexMatch[]
+  badminton: EmbedSportexMatch[]
+  volleyball: EmbedSportexMatch[]
+  tennis: EmbedSportexMatch[]
+  race: EmbedSportexMatch[]
+  fight: EmbedSportexMatch[]
+  hockey: EmbedSportexMatch[]
+  rugby: EmbedSportexMatch[]
+  cricket: EmbedSportexMatch[]
+  other: EmbedSportexMatch[]
+}
