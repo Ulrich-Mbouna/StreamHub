@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react"
+import type { EmbedSportexMatch, EmbedSportexResponse } from "../types"
 
-const API_BASE = "https://api.sportsrc.org"
+const EMBEDSPORTEX_API = "https://api.esportex.site/api/streams"
 const POLL_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 const APPROACHING_LIVE_MS = 30 * 60 * 1000 // 30 minutes before kickoff
+
+// ─── Public Types ────────────────────────────────────────────────────────────
 
 export interface LiveMatch {
   id: string
@@ -18,30 +21,6 @@ export interface LiveMatch {
   viewers: number
 }
 
-interface Source {
-  id: string
-  streamNo: number
-  language: string
-  hd: boolean
-  embedUrl: string
-  source: string
-  viewers: number
-}
-
-interface MatchDetail {
-  id: string
-  title: string
-  category: string
-  date: number
-  popular: boolean
-  poster: string
-  teams: {
-    home: { name: string; badge: string }
-    away: { name: string; badge: string }
-  }
-  sources: Source[]
-}
-
 interface PollingStatus {
   isPolling: boolean
   lastFetch: Date | null
@@ -55,6 +34,48 @@ interface LiveStreamContextType {
   nextUpcoming: { title: string; date: number; teams: { home: { name: string; badge: string }; away: { name: string; badge: string } } } | null
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function parseKickoff(kickoff: string): number {
+  // Format: "2026-07-03 02:00" in WIB (UTC+7)
+  return new Date(kickoff.replace(" ", "T") + "+07:00").getTime()
+}
+
+function parseTeamFromTag(tag: string): { home: string; away: string } {
+  // Tag format: "Spain vs Austria" or "Team A vs Team B"
+  const parts = tag.split(" vs ")
+  if (parts.length === 2) {
+    return { home: parts[0].trim(), away: parts[1].trim() }
+  }
+  // Fallback: split by " - " or use the whole tag
+  const dashParts = tag.split(" - ")
+  if (dashParts.length === 2) {
+    return { home: dashParts[0].trim(), away: dashParts[1].trim() }
+  }
+  return { home: tag, away: "" }
+}
+
+function flattenMatches(response: EmbedSportexResponse): EmbedSportexMatch[] {
+  const categories = [
+    response.football,
+    response.basketball,
+    response.amfootball,
+    response.baseball,
+    response.badminton,
+    response.volleyball,
+    response.tennis,
+    response.race,
+    response.fight,
+    response.hockey,
+    response.rugby,
+    response.cricket,
+    response.other,
+  ]
+  return categories.flat()
+}
+
+// ─── Shared Helpers ──────────────────────────────────────────────────────────
+
 const LiveStreamContext = createContext<LiveStreamContextType>({
   liveMatch: null,
   setLiveMatch: () => {},
@@ -62,29 +83,86 @@ const LiveStreamContext = createContext<LiveStreamContextType>({
   nextUpcoming: null,
 })
 
-function getDirectPlayerUrl(source: Source): string {
-  return `https://embed.st/embed/${source.source}/${source.id}/${source.streamNo}`
-}
-
-function findLiveOrApproachingMatch(matches: Array<{ id: string; date: number }>): { id: string; date: number } | null {
+function findLiveOrApproachingMatch(matches: Array<{ slug: string; kickoff: string; endTime: string }>): { slug: string; kickoff: string } | null {
   const now = Date.now()
 
-  // Priority 1: Currently LIVE matches (started but not ended — assume max 2h duration)
   const liveMatch = matches.find((m) => {
-    const diff = now - m.date
-    return diff >= 0 && diff < 2 * 60 * 60 * 1000
+    const start = parseKickoff(m.kickoff)
+    const end = parseKickoff(m.endTime)
+    return now >= start && now <= end
   })
-  if (liveMatch) return liveMatch
+  if (liveMatch) return { slug: liveMatch.slug, kickoff: liveMatch.kickoff }
 
-  // Priority 2: Match within 30 minutes of starting
   const approachingMatch = matches.find((m) => {
-    const diff = m.date - now
+    const start = parseKickoff(m.kickoff)
+    const diff = start - now
     return diff > 0 && diff <= APPROACHING_LIVE_MS
   })
-  if (approachingMatch) return approachingMatch
+  if (approachingMatch) return { slug: approachingMatch.slug, kickoff: approachingMatch.kickoff }
 
   return null
 }
+
+// ─── EmbedSportex Fetcher ────────────────────────────────────────────────────
+
+async function fetchFromEmbedSportex(): Promise<{ match: LiveMatch | null; upcoming: { title: string; date: number; teams: { home: { name: string; badge: string }; away: { name: string; badge: string } } } | null }> {
+  const res = await fetch(EMBEDSPORTEX_API, {
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) throw new Error(`EmbedSportex HTTP ${res.status}`)
+  const json = await res.json()
+  if (!json.success) throw new Error("EmbedSportex returned unsuccessful response")
+
+  const allMatches = flattenMatches(json as EmbedSportexResponse)
+  if (!allMatches.length) return { match: null, upcoming: null }
+
+  const target = findLiveOrApproachingMatch(allMatches)
+
+  if (!target) {
+    const now = Date.now()
+    const next = allMatches.find((m) => parseKickoff(m.kickoff) > now)
+    if (next) {
+      const teams = parseTeamFromTag(next.tag)
+      return {
+        match: null,
+        upcoming: {
+          title: next.tag,
+          date: parseKickoff(next.kickoff),
+          teams: {
+            home: { name: teams.home, badge: "" },
+            away: { name: teams.away, badge: "" },
+          },
+        },
+      }
+    }
+    return { match: null, upcoming: null }
+  }
+
+  const matchData = allMatches.find((m) => m.slug === target.slug)
+  if (!matchData || !matchData.iframes?.length) return { match: null, upcoming: null }
+
+  const teams = parseTeamFromTag(matchData.tag)
+  const bestSource = matchData.iframes.find((s) => s.server.includes("FHD")) || matchData.iframes[0]
+
+  return {
+    match: {
+      id: matchData.slug,
+      title: matchData.tag,
+      category: matchData.league,
+      embedUrl: bestSource.url,
+      date: parseKickoff(matchData.kickoff),
+      teams: {
+        home: { name: teams.home, badge: "" },
+        away: { name: teams.away, badge: "" },
+      },
+      source: bestSource.server,
+      viewers: 0,
+    },
+    upcoming: null,
+  }
+}
+
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function LiveStreamProvider({ children }: { children: ReactNode }) {
   const [liveMatch, setLiveMatchState] = useState<LiveMatch | null>(null)
@@ -104,7 +182,6 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Polling effect: fetch football matches every 30 seconds
   useEffect(() => {
     mountedRef.current = true
 
@@ -113,78 +190,34 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
 
       setPollingStatus((prev) => ({ ...prev, isPolling: true }))
 
+      let result: { match: LiveMatch | null; upcoming: { title: string; date: number; teams: { home: { name: string; badge: string }; away: { name: string; badge: string } } } | null } | null = null
+      let lastError: string | null = null
+
       try {
-        const res = await fetch(`${API_BASE}/?data=matches&category=football`, {
-          signal: AbortSignal.timeout(15000),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json = await res.json()
-        if (!json.success || !json.data) throw new Error("API returned unsuccessful response")
-
-        if (!mountedRef.current) return
-
-        const matches = json.data as Array<{ id: string; date: number; title: string; teams: { home: { name: string; badge: string }; away: { name: string; badge: string } } }>
-        const target = findLiveOrApproachingMatch(matches)
-
-        if (!target) {
-          // No live/approaching match — store the next upcoming one for display
-          const now = Date.now()
-          const next = matches.find((m) => m.date > now)
-          setNextUpcoming(next ? { title: next.title, date: next.date, teams: next.teams } : null)
-          setPollingStatus({ isPolling: false, lastFetch: new Date(), error: null })
-          return
-        }
-
-        // Clear nextUpcoming since we have a live/approaching match
-        setNextUpcoming(null)
-
-        // Only fetch detail if we haven't already fetched for this match
-        if (fetchedMatchIdRef.current === target.id) {
-          setPollingStatus({ isPolling: false, lastFetch: new Date(), error: null })
-          return
-        }
-
-        const detailRes = await fetch(
-          `${API_BASE}/?data=detail&category=football&id=${target.id}`,
-          { signal: AbortSignal.timeout(10000) }
-        )
-        if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`)
-        const detailJson = await detailRes.json()
-        if (!detailJson.success || !detailJson.data) throw new Error("No stream data available")
-
-        if (!mountedRef.current) return
-
-        const d = detailJson.data as MatchDetail
-        if (!d.sources?.length) {
-          setPollingStatus({ isPolling: false, lastFetch: new Date(), error: null })
-          return
-        }
-
-        const bestSource = d.sources.find((s: Source) => s.hd) || d.sources[0]
-        setLiveMatchState({
-          id: d.id,
-          title: d.title,
-          category: d.category,
-          embedUrl: getDirectPlayerUrl(bestSource),
-          date: d.date,
-          teams: d.teams,
-          source: bestSource.source,
-          viewers: bestSource.viewers,
-        })
-        fetchedMatchIdRef.current = d.id
-
-        setPollingStatus({ isPolling: false, lastFetch: new Date(), error: null })
+        result = await fetchFromEmbedSportex()
       } catch (err: unknown) {
-        if (!mountedRef.current) return
+        lastError = err instanceof Error ? err.message : "EmbedSportex failed"
+      }
+
+      if (!mountedRef.current) return
+
+      if (result?.match) {
+        if (fetchedMatchIdRef.current !== result.match.id) {
+          setLiveMatchState(result.match)
+          fetchedMatchIdRef.current = result.match.id
+        }
+        setNextUpcoming(null)
+        setPollingStatus({ isPolling: false, lastFetch: new Date(), error: null })
+      } else {
+        setNextUpcoming(result?.upcoming ?? null)
         setPollingStatus({
           isPolling: false,
           lastFetch: new Date(),
-          error: err instanceof Error ? err.message : "Polling failed",
+          error: lastError,
         })
       }
     }
 
-    // Run immediately on mount, then every 30 seconds
     void poll()
     const interval = setInterval(() => {
       void poll()
