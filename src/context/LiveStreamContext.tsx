@@ -7,6 +7,16 @@ const APPROACHING_LIVE_MS = 30 * 60 * 1000 // 30 minutes before kickoff
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
+export interface LiveMatchSource {
+  id: string
+  streamNo: number
+  language: string
+  hd: boolean
+  embedUrl: string
+  source: string
+  viewers: number
+}
+
 export interface LiveMatch {
   id: string
   title: string
@@ -19,6 +29,7 @@ export interface LiveMatch {
   }
   source: string
   viewers: number
+  sources: LiveMatchSource[]
 }
 
 interface PollingStatus {
@@ -56,22 +67,7 @@ function parseTeamFromTag(tag: string): { home: string; away: string } {
 }
 
 function flattenMatches(response: EmbedSportexResponse): EmbedSportexMatch[] {
-  const categories = [
-    response.football,
-    response.basketball,
-    response.amfootball,
-    response.baseball,
-    response.badminton,
-    response.volleyball,
-    response.tennis,
-    response.race,
-    response.fight,
-    response.hockey,
-    response.rugby,
-    response.cricket,
-    response.other,
-  ]
-  return categories.flat()
+  return response.football || []
 }
 
 // ─── Shared Helpers ──────────────────────────────────────────────────────────
@@ -142,21 +138,31 @@ async function fetchFromEmbedSportex(): Promise<{ match: LiveMatch | null; upcom
   if (!matchData || !matchData.iframes?.length) return { match: null, upcoming: null }
 
   const teams = parseTeamFromTag(matchData.tag)
-  const bestSource = matchData.iframes.find((s) => s.server.includes("FHD")) || matchData.iframes[0]
+  const allSources: LiveMatchSource[] = matchData.iframes.map((iframe, index) => ({
+    id: matchData.slug,
+    streamNo: index + 1,
+    language: iframe.server,
+    hd: iframe.server.includes("HD") || iframe.server.includes("FHD"),
+    embedUrl: iframe.url,
+    source: iframe.server,
+    viewers: 0,
+  }))
+  const bestSource = allSources.find((s) => s.hd) || allSources[0]
 
   return {
     match: {
       id: matchData.slug,
       title: matchData.tag,
       category: matchData.league,
-      embedUrl: bestSource.url,
+      embedUrl: bestSource.embedUrl,
       date: parseKickoff(matchData.kickoff),
       teams: {
         home: { name: teams.home, badge: "" },
         away: { name: teams.away, badge: "" },
       },
-      source: bestSource.server,
+      source: bestSource.source,
       viewers: 0,
+      sources: allSources,
     },
     upcoming: null,
   }
