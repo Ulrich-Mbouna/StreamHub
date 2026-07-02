@@ -1,24 +1,25 @@
-import type React from "react"
+import type { ComponentType, Dispatch, SetStateAction } from "react"
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Tv, Monitor, Trophy, Sun, Moon, Home, TvMinimalPlay, Music, X } from "lucide-react"
+import { Tv, Monitor, Trophy, Sun, Moon, Home, TvMinimalPlay, Music, X, Info } from "lucide-react"
 import { useTheme } from "../context/ThemeContext"
 
-type Tab = "home" | "iptv" | "catalog" | "sports" | "music" | "legal"
+type Tab = "home" | "iptv" | "catalog" | "sports" | "music" | "about" | "legal"
 
 interface SidebarProps {
   activeTab: Tab
-  onTabChange: (tab: Tab) => void
+  onTabChange: Dispatch<SetStateAction<Tab>>
   isOpen: boolean
   onClose: () => void
 }
 
-const navItems: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const navItems: { id: Tab; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "iptv", label: "Live Streams", icon: Tv },
   { id: "catalog", label: "IPTV Channels", icon: TvMinimalPlay },
   { id: "sports", label: "Live Sports", icon: Trophy },
   { id: "music", label: "Stream Music", icon: Music },
+  { id: "about", label: "About", icon: Info },
 ]
 
 const SPRING_CONFIG = { type: "spring" as const, stiffness: 380, damping: 30 }
@@ -101,7 +102,7 @@ export default function Sidebar({ activeTab, onTabChange, isOpen, onClose }: Sid
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map(({ id, label, icon: Icon }, index) => {
             const isActive = activeTab === id
             return (

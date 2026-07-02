@@ -9,6 +9,7 @@ import {
   Monitor,
   Zap,
   CircleDot,
+  Shield,
   Volleyball,
   Target,
   Swords,
@@ -17,9 +18,10 @@ import {
   Users,
 } from "lucide-react"
 import { useTheme } from "../context/ThemeContext"
-import type { Match } from "../types"
+import type { Match, MatchDetail } from "../types"
+import SportsPlayer from "./SportsPlayer"
 
-const API_BASE = "https://api.sportsrc.org"
+const API_BASE = "https://api.esportex.site/api"
 
 interface Source {
   id: string
@@ -31,39 +33,22 @@ interface Source {
   viewers: number
 }
 
-interface MatchDetail {
-  id: string
-  title: string
-  category: string
-  date: number
-  popular: boolean
-  poster: string
-  teams: {
-    home: { name: string; badge: string }
-    away: { name: string; badge: string }
-  }
-  sources: Source[]
-}
-
 const sportCategories: {
   id: string
+  apiCategory: string
   label: string
   icon: React.ComponentType<{ className?: string }>
 }[] = [
-  { id: "football", label: "Football", icon: CircleDot },
-  { id: "cricket", label: "Cricket", icon: Volleyball },
-  { id: "basketball", label: "Basketball", icon: Volleyball },
-  { id: "american-football", label: "NFL", icon: Volleyball },
-  { id: "hockey", label: "Hockey", icon: Target },
-  { id: "baseball", label: "Baseball", icon: CircleDot },
-  { id: "motor-sports", label: "Motorsport", icon: Car },
-  { id: "fight", label: "UFC / Boxing", icon: Swords },
-  { id: "tennis", label: "Tennis", icon: Target },
+  { id: "football", apiCategory: "football", label: "Football", icon: CircleDot },
+  { id: "cricket", apiCategory: "cricket", label: "Cricket", icon: Trophy },
+  { id: "basketball", apiCategory: "basketball", label: "Basketball", icon: Volleyball },
+  { id: "american-football", apiCategory: "amfootball", label: "NFL", icon: Shield },
+  { id: "hockey", apiCategory: "hockey", label: "Hockey", icon: Timer },
+  { id: "baseball", apiCategory: "baseball", label: "Baseball", icon: Target },
+  { id: "motor-sports", apiCategory: "race", label: "Motorsport", icon: Car },
+  { id: "fight", apiCategory: "fight", label: "UFC / Boxing", icon: Swords },
+  { id: "tennis", apiCategory: "tennis", label: "Tennis", icon: Zap },
 ]
-
-function getDirectPlayerUrl(source: Source): string {
-  return `https://embed.st/embed/${source.source}/${source.id}/${source.streamNo}`
-}
 
 function formatDate(ts: number) {
   const d = new Date(ts)
@@ -86,6 +71,18 @@ function formatDate(ts: number) {
     }),
     isLive: false,
   }
+}
+
+function parseKickoff(kickoff: string): number {
+  return new Date(kickoff.replace(" ", "T") + "+07:00").getTime()
+}
+
+function parseTeamFromTag(tag: string): { home: string; away: string } {
+  const parts = tag.split(" vs ")
+  if (parts.length === 2) return { home: parts[0].trim(), away: parts[1].trim() }
+  const dashParts = tag.split(" - ")
+  if (dashParts.length === 2) return { home: dashParts[0].trim(), away: dashParts[1].trim() }
+  return { home: tag, away: "" }
 }
 
 const listVariants = {
@@ -151,6 +148,9 @@ export default function LiveSports() {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [, setTick] = useState(0)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const matchesRequestIdRef = useRef(0)
+  const detailRequestIdRef = useRef(0)
+  const cachedApiResponseRef = useRef<Record<string, Array<{ slug: string; tag: string; kickoff: string; endTime: string; poster: string | null; league: string; iframes: Array<{ server: string; url: string }> }>> | null>(null)
 
   useEffect(() => {
     tickRef.current = setInterval(() => setTick((t) => t + 1), 60000)
@@ -160,28 +160,51 @@ export default function LiveSports() {
   }, [])
 
   const fetchMatches = useCallback(async (category: string) => {
+    const requestId = ++matchesRequestIdRef.current
     setLoading(true)
     setError(null)
     setDetail(null)
     setActiveSource(null)
     try {
-      const res = await fetch(
-        `${API_BASE}/?data=matches&category=${category}`,
-        { signal: AbortSignal.timeout(15000) }
-      )
+      const res = await fetch(`${API_BASE}/streams`, {
+        signal: AbortSignal.timeout(15000),
+      })
+      if (requestId !== matchesRequestIdRef.current) return
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
+      if (requestId !== matchesRequestIdRef.current) return
       if (json.success) {
-        setMatches(json.data || [])
+        cachedApiResponseRef.current = json
+        const apiCategory = sportCategories.find((c) => c.id === category)?.apiCategory || category
+        const categoryMatches = json[apiCategory] || []
+        const mapped: Match[] = categoryMatches.map((m: { slug: string; tag: string; kickoff: string; endTime: string; poster: string | null; league: string; iframes: Array<{ server: string; url: string }> }) => {
+          const teams = parseTeamFromTag(m.tag)
+          return {
+            id: m.slug,
+            title: m.tag,
+            category: m.league,
+            date: parseKickoff(m.kickoff),
+            popular: m.iframes.length > 3,
+            poster: m.poster || "",
+            teams: {
+              home: { name: teams.home, badge: "" },
+              away: { name: teams.away, badge: "" },
+            },
+          }
+        })
+        setMatches(mapped)
       } else {
         throw new Error("API returned unsuccessful response")
       }
     } catch (err: unknown) {
+      if (requestId !== matchesRequestIdRef.current) return
       setError(
         err instanceof Error ? err.message : "Failed to fetch matches"
       )
     } finally {
-      setLoading(false)
+      if (requestId === matchesRequestIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -194,32 +217,112 @@ export default function LiveSports() {
   }, [sport, fetchMatches])
 
   const fetchDetail = useCallback(async (match: Match) => {
+    const requestId = ++detailRequestIdRef.current
     setDetailLoading(true)
     setDetailError(null)
     setDetail(null)
     setActiveSource(null)
     try {
-      const res = await fetch(
-        `${API_BASE}/?data=detail&category=${match.category}&id=${match.id}`,
-        { signal: AbortSignal.timeout(15000) }
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      if (json.success && json.data) {
-        const d = json.data as MatchDetail
-        setDetail(d)
-        if (d.sources?.length) setActiveSource(d.sources[0])
-      } else {
+      // If the match is already in the current filtered list, build detail directly (zero API calls)
+      const inCurrentList = matches.find((m) => m.id === match.id)
+      if (inCurrentList) {
+        if (requestId !== detailRequestIdRef.current) return
+        const detailData: MatchDetail = {
+          ...inCurrentList,
+          sources: [],
+        }
+        setDetail(detailData)
+        // Try to find stream data from cache without a full fetch
+        const json = cachedApiResponseRef.current
+        if (json) {
+          const apiCategory = sportCategories.find((c) => c.id === sport)?.apiCategory || sport
+          const catMatches = json[apiCategory] || []
+          const raw = catMatches.find((m: { slug: string }) => m.slug === match.id)
+          if (raw && raw.iframes?.length) {
+            const sources: Source[] = raw.iframes.map((iframe, index) => ({
+              id: raw.slug,
+              streamNo: index + 1,
+              language: iframe.server,
+              hd: iframe.server.includes("HD") || iframe.server.includes("FHD"),
+              embedUrl: iframe.url,
+              source: iframe.server,
+              viewers: 0,
+            }))
+            if (requestId !== detailRequestIdRef.current) return
+            setDetail({ ...detailData, sources })
+            if (sources.length) setActiveSource(sources[0])
+          }
+        }
+        setDetailLoading(false)
+        return
+      }
+
+      // Cache miss — use cached API response if available, otherwise fetch fresh data
+      let json = cachedApiResponseRef.current
+      if (!json) {
+        const res = await fetch(`${API_BASE}/streams`, {
+          signal: AbortSignal.timeout(15000),
+        })
+        if (requestId !== detailRequestIdRef.current) return
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const fetched = await res.json()
+        if (requestId !== detailRequestIdRef.current) return
+        if (!fetched.success) throw new Error("API returned unsuccessful response")
+        cachedApiResponseRef.current = fetched
+        json = fetched
+      }
+
+      // Find the match across all categories
+      const allCategories = ["football", "basketball", "amfootball", "baseball", "badminton", "volleyball", "tennis", "race", "fight", "hockey", "rugby", "cricket", "other"]
+      let foundMatch: { slug: string; tag: string; kickoff: string; endTime: string; poster: string | null; league: string; iframes: Array<{ server: string; url: string }> } | null = null
+      for (const cat of allCategories) {
+        const catMatches = json[cat] || []
+        foundMatch = catMatches.find((m: { slug: string }) => m.slug === match.id) || null
+        if (foundMatch) break
+      }
+
+      if (!foundMatch || !foundMatch.iframes?.length) {
         throw new Error("No stream data available")
       }
+
+      const teams = parseTeamFromTag(foundMatch.tag)
+      const sources: Source[] = foundMatch.iframes.map((iframe, index) => ({
+        id: foundMatch!.slug,
+        streamNo: index + 1,
+        language: iframe.server,
+        hd: iframe.server.includes("HD") || iframe.server.includes("FHD"),
+        embedUrl: iframe.url,
+        source: iframe.server,
+        viewers: 0,
+      }))
+
+      if (requestId !== detailRequestIdRef.current) return
+      const detailData: MatchDetail = {
+        id: foundMatch.slug,
+        title: foundMatch.tag,
+        category: foundMatch.league,
+        date: parseKickoff(foundMatch.kickoff),
+        popular: foundMatch.iframes.length > 3,
+        poster: foundMatch.poster || "",
+        teams: {
+          home: { name: teams.home, badge: "" },
+          away: { name: teams.away, badge: "" },
+        },
+        sources,
+      }
+      setDetail(detailData)
+      if (sources.length) setActiveSource(sources[0])
     } catch (err: unknown) {
+      if (requestId !== detailRequestIdRef.current) return
       setDetailError(
         err instanceof Error ? err.message : "Failed to load stream"
       )
     } finally {
-      setDetailLoading(false)
+      if (requestId === detailRequestIdRef.current) {
+        setDetailLoading(false)
+      }
     }
-  }, [])
+  }, [matches, sport])
 
   const liveCount = matches.filter((m) => formatDate(m.date).isLive).length
 
@@ -579,7 +682,7 @@ export default function LiveSports() {
           <div
             className={`flex flex-col min-h-0 xl:w-[45%] ${
               detail || detailLoading || detailError ? "order-1" : "order-2"
-            } xl:order-2`}
+            } xl:order-2 ${detail || detailLoading || detailError ? "xl:sticky xl:top-4" : ""}`}
           >
             <div className="flex items-center gap-2 mb-3">
               <Play
@@ -635,14 +738,15 @@ export default function LiveSports() {
                   exit={panelExit}
                   className="flex flex-col min-h-0 xl:flex-1"
                 >
-                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black border border-white/[0.06] xl:aspect-auto xl:flex-1 xl:min-h-0">
+                  <div className="w-full h-[40vw] max-h-[280px] sm:h-[35vw] sm:max-h-[320px] md:h-[30vw] md:max-h-[360px] lg:h-[28vw] lg:max-h-[400px] xl:h-full xl:flex-1 xl:min-h-[280px] rounded-2xl overflow-hidden bg-black border border-white/[0.06]">
                     {activeSource ? (
-                      <iframe
-                        src={getDirectPlayerUrl(activeSource)}
-                        className="w-full h-full border-0"
+                      <SportsPlayer
+                        key={detail.id}
+                        sources={detail.sources}
+                        activeSource={activeSource}
+                        onSourceChange={setActiveSource}
                         title={detail.title}
-                        allow="autoplay; encrypted-media; fullscreen"
-                        allowFullScreen
+                        fillContainer
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
