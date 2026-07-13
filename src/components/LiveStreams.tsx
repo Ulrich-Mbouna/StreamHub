@@ -2,9 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Tv,
-  Radio,
   Play,
-  Signal,
   Zap,
   CircleDot,
   Clock,
@@ -279,57 +277,7 @@ export default function LiveStreams() {
             </AnimatePresence>
           </div>
 
-          {/* Now Playing Bar */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={watchingLive ? `live-${liveMatch?.id}` : `channel-${activeChannel.id}`}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-              className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-2xl border backdrop-blur-sm transition-colors ${isDark ? "bg-dark-300/30 border-white/5" : "bg-white/80 border-slate-200"}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${watchingLive ? "bg-sport-red/20" : isDark ? "bg-accent/20" : "bg-accent/10"}`}>
-                    {watchingLive ? (
-                      <CircleDot className="w-4 h-4 sm:w-5 sm:h-5 text-sport-red" />
-                    ) : (
-                      <Radio className="w-4 h-4 sm:w-5 sm:h-5 text-accent-light" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
-                      {watchingLive && liveMatch ? liveMatch.title : activeChannel.name}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-xs hidden sm:inline ${isDark ? "text-dark-100" : "text-slate-500"}`}>
-                        {watchingLive && liveMatch ? liveMatch.teams.home.name + " vs " + liveMatch.teams.away.name : activeChannel.category}
-                      </span>
-                      {watchingLive && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-sport-red/15 text-sport-red rounded">
-                          <span className="w-1 h-1 rounded-full bg-sport-red animate-pulse" />
-                          LIVE
-                        </span>
-                      )}
-                      {!watchingLive && (
-                        <>
-                          <span className={`w-1 h-1 rounded-full hidden sm:block ${isDark ? "bg-dark-100" : "bg-slate-400"}`} />
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getQualityColor(activeChannel.quality, isDark)}`}>
-                            {activeChannel.quality}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs shrink-0">
-                  <Signal className="w-3.5 h-3.5 text-sport-green" />
-                  <span className="text-sport-green font-medium hidden sm:inline">Connected</span>
-                </div>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+
         </div>
 
         {/* Sidebar */}

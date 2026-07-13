@@ -282,7 +282,7 @@ export default function IPTVChannels() {
 
       {/* Main Content */}
       {!loading && !error && (
-        <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_380px] gap-4 sm:gap-6 xl:flex-1 xl:min-h-0">
+        <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_500px] xl:grid-rows-[1fr] gap-4 sm:gap-6 xl:flex-1 xl:min-h-0">
           {/* Channel List */}
           <div className="flex flex-col min-h-0 order-2 xl:order-1">
             {/* Search Bar */}
@@ -333,7 +333,7 @@ export default function IPTVChannels() {
             </div>
 
             {/* Channel List */}
-            <div ref={channelListRef} className="max-h-[58vh] xl:max-h-none xl:flex-1 overflow-y-auto space-y-1.5 pr-1 pb-1">
+            <div ref={channelListRef} className="max-h-[58vh] xl:max-h-none xl:flex-1 xl:min-h-0 overflow-y-auto space-y-1.5 pr-1 pb-1">
               {grouped.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16">
                   <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 ${isDark ? "bg-white/5" : "bg-slate-100"}`}>
@@ -482,15 +482,15 @@ export default function IPTVChannels() {
               <div className="flex flex-col min-h-0 xl:flex-1">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-1.5 rounded-lg bg-sport-yellow/15">
-                    <Sparkles className="w-3.5 h-3.5 text-sport-yellow" />
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-sport-yellow" />
                   </div>
                   <h3
-                    className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-dark-100" : "text-slate-500"}`}
+                    className={`text-xs sm:text-sm font-semibold uppercase tracking-wider ${isDark ? "text-dark-100" : "text-slate-500"}`}
                   >
                     Now Playing
                   </h3>
                 </div>
-                <div className="aspect-video w-full min-h-0 rounded-2xl overflow-hidden bg-black border border-white/[0.06] xl:aspect-auto xl:flex-1 xl:min-h-0">
+                <div className="w-full min-h-0 rounded-2xl overflow-hidden bg-black border border-white/[0.06] h-[200px] sm:h-[280px] md:h-[360px] xl:aspect-video xl:h-auto xl:min-h-0 xl:max-h-[450px]">
                   <VideoPlayer
                     src={activeChannel.url}
                     title={`${activeChannel.name} — ${activeChannel.category}`}
@@ -504,19 +504,19 @@ export default function IPTVChannels() {
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <div
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 ${isDark ? "bg-white/5" : "bg-slate-100"}`}
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mx-auto mb-3 ${isDark ? "bg-white/5" : "bg-slate-100"}`}
                   >
                     <Play
-                      className={`w-7 h-7 ${isDark ? "text-dark-100" : "text-slate-400"}`}
+                      className={`w-8 h-8 sm:w-10 sm:h-10 ${isDark ? "text-dark-100" : "text-slate-400"}`}
                     />
                   </div>
                   <p
-                    className={`text-sm font-medium mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}
+                    className={`text-sm sm:text-base font-medium mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}
                   >
                     No channel selected
                   </p>
                   <p
-                    className={`text-xs ${isDark ? "text-dark-100" : "text-slate-500"}`}
+                    className={`text-xs sm:text-sm ${isDark ? "text-dark-100" : "text-slate-500"}`}
                   >
                     Click a channel to preview
                   </p>
